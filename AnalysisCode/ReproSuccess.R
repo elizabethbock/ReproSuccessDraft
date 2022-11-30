@@ -1,23 +1,21 @@
-
-
-lh <- read.csv("LifeHistory_20220828.csv")
+lh <- read.csv("RawData/LifeHistory_20220828.csv")
 
 lh$Birth.Date <- as.Date(lh$Birth.Date)
 
-all_surveys <- read.csv("all_surveys_20211028.csv")
+all_surveys <- read.csv("RawData/all_surveys_20211028.csv")
 
 all_surveys$Observation.Date <- as.Date(all_surveys$Observation.Date)
 
 # Select females older than 11 seen between 2001-2011
 
-preMHW <- all_surveys[which(all_surveys$Observation.Date >= "2001-01-01"&
-                        all_surveys$Observation.Date <= "2011-01-01"),]
+preMHW <- all_surveys[which(all_surveys$Observation.Date >= "2001-01-01" &
+                              all_surveys$Observation.Date <= "2011-01-01"), ]
 
-preMHW <- preMHW[which(preMHW$sex == "FEMALE" & preMHW$age >= 11),]
+preMHW <- preMHW[which(preMHW$sex == "FEMALE" & preMHW$age >= 11),] 
 
 pre_females <- unique(preMHW$Dolphin.ID)
 
-# Select females with 10+ sightings
+# Select females with 10 or more sightings 
 
 counts <- table(preMHW$Dolphin.ID)
 
@@ -29,13 +27,11 @@ pre_females <- unique(preMHW$Dolphin.ID)
 
 library(igraph)
 
-library (remotes)
-
-remotes :: install_github("vjf2/SocGen")
+# remotes::install_github("vjf2/SocGen")
 
 library(SocGen)
 
-SRI <- simple_ratio (sightings = preMHW,
+SRI <- simple_ratio( sightings = preMHW,
                      group_variable = "Observation.ID",
                      dates = "Observation.Date",
                      IDs = "Dolphin.ID",
@@ -47,28 +43,48 @@ SRI <- simple_ratio (sightings = preMHW,
 mhead(SRI)
 
 
-network <- graph_from_adjacency_matrix(SRI,
-                                       mode = "undirected",
-                                       weighted = TRUE,
+network <- graph_from_adjacency_matrix(SRI, 
+                                       mode = "undirected", 
+                                       weighted = TRUE, 
                                        diag = FALSE)
 
-plot(network, labels = FALSE)
 
 deg <- degree(network)
 
 strength <- graph.strength(network)
 
-# Reproductive success (will need to rerun with updated file and sort into pre/post MHW)
+eig <- eigen_centrality(network)$vector
 
-repro <- read.csv ("reprosuccess_2009_2019.csv")
+closeness <- closeness(network)
 
-repro <- repro[which(repro$gaps == 0), ]
+#Reproductive success data 
+
+repro <- read.csv("RawData/reprosuccess_2011_2020.csv")
+
+repro <- repro[which(repro$gaps < 3), ]
 
 repro$strength <- strength[match(repro$X, names(strength))]
+repro$degree <- deg[match(repro$X, names(strength))]
+repro$eig <- eig[match(repro$X, names(strength))]
+repro$closeness <- closeness[match(repro$X, names(strength))]
 
-cor(repro$calving_success, repro$strength, use = "complete.obs")
+repro <- repro[which(repro$X %in% pre_females),]
 
-mod <- lm(repro$calving_success~repro$strength)
+cor(repro[,c("degree", "eig", "closeness", "strength")])
+
+cor(repro$survivingcalves, repro$strength, use = "complete.obs")
+cor(repro$survivingcalves, repro$degree, use = "complete.obs")
+cor(repro$survivingcalves, repro$eig, use = "complete.obs")
+cor(repro$survivingcalves, repro$closeness, use = "complete.obs")
+
+repro$birthyear <- lh$Birth.Date[match(repro$X, lh$Dolphin.ID)]
+repro$birthyear <- format(repro$birthyear, "%Y") |> as.numeric()
+
+repro$counts <- counts[match(repro$X, names(counts))]
+
+mod <- glm(survivingcalves~closeness + degree + eig + strength + 
+             birthyear + log(counts), 
+           data = repro, family = "poisson") 
 
 summary(mod)
 
