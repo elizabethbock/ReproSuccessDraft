@@ -82,8 +82,23 @@ repro$birthyear <- format(repro$birthyear, "%Y") |> as.numeric()
 
 repro$counts <- counts[match(repro$X, names(counts))]
 
+#Add foraging data 
+
+
+foraging_data <- read.csv("RawData/foraging_categories.csv")
+
+repro$cluster <- foraging_data$ClusterName[match(repro$X, 
+                                                 foraging_data$Dolphin.ID)]
+
+#Set TDPDFOR to reference level 
+
+repro$cluster <- factor(repro$cluster, levels = c("TDPDFOR", 
+                                                     "MLLFOR/TDPDFOR", 
+                                                     "SEAGRASS FOR", 
+                                                     "SPF"))
+
 mod <- glm(survivingcalves~closeness + degree + eig + strength + 
-             birthyear + log(counts), 
+             cluster + birthyear + log(counts), 
            data = repro, family = "poisson") 
 
 summary(mod)
